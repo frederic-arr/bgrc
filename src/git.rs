@@ -14,6 +14,10 @@ pub fn check(args: &Args, at: &Path) -> Result<()> {
         has_no_stashed_changes(args, at).context("has stashed changes")?;
     }
 
+    if !args.offline && !args.skip_unpushed_commits {
+        fetch(args, at).context("failed to fetch")?;
+    }
+
     if !args.skip_unpushed_commits {
         has_no_unpushed_commits(args, at).context("has unpushed references")?;
     }
@@ -60,10 +64,6 @@ fn fetch(args: &Args, at: &Path) -> Result<()> {
 }
 
 fn has_no_unpushed_commits(args: &Args, at: &Path) -> Result<()> {
-    if !args.offline {
-        fetch(args, at)?;
-    }
-
     let r = cmd(args, at)
         .arg("log")
         .arg("--branches")
