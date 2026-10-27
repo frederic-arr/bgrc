@@ -25,9 +25,13 @@ pub enum SearchResult {
     Mixed {
         versioned: Vec<PathBuf>,
         unversioned: Vec<PathBuf>,
+        unknown: Vec<PathBuf>,
     },
     Versioned {
         versioned: Vec<PathBuf>,
+    },
+    Unknown {
+        unknown: Vec<PathBuf>,
     },
     Empty,
 }
@@ -42,7 +46,7 @@ impl SearchResult {
         }
 
         for glob in &args.search.ignore {
-            overrides = overrides.add(&format!("!{{{glob}}}")).unwrap();
+            overrides = overrides.add(&format!("!{{{glob}}}"))?;
         }
 
         let mut builder = WalkBuilder::new(&args.path);
@@ -78,7 +82,9 @@ impl SearchResult {
             SearchResult::Versioned { versioned } | SearchResult::Mixed { versioned, .. } => {
                 versioned.as_slice()
             }
-            SearchResult::Unversioned { .. } | SearchResult::Empty => &[],
+            SearchResult::Unversioned { .. }
+            | SearchResult::Unknown { .. }
+            | SearchResult::Empty => &[],
         }
     }
 
@@ -87,7 +93,20 @@ impl SearchResult {
             SearchResult::Unversioned { unversioned } | SearchResult::Mixed { unversioned, .. } => {
                 unversioned.as_slice()
             }
-            SearchResult::Versioned { .. } | SearchResult::Empty => &[],
+            SearchResult::Versioned { .. } | SearchResult::Unknown { .. } | SearchResult::Empty => {
+                &[]
+            }
+        }
+    }
+
+    pub fn unknown(&self) -> &[PathBuf] {
+        match self {
+            SearchResult::Unknown { unknown } | SearchResult::Mixed { unknown, .. } => {
+                unknown.as_slice()
+            }
+            SearchResult::Versioned { .. }
+            | SearchResult::Unversioned { .. }
+            | SearchResult::Empty => &[],
         }
     }
 
@@ -98,64 +117,108 @@ impl SearchResult {
     ) -> Result<SearchResult> {
         let mut versioned = vec![];
         let mut unversioned = vec![];
+        let mut unknown: Vec<PathBuf> = vec![];
 
-        for entry in std::fs::read_dir(path)? {
+        let Ok(iter) = std::fs::read_dir(path) else {
+            return Ok(SearchResult::Unknown {
+                unknown: vec![path.to_path_buf()],
+            });
+        };
+
+        for entry in iter {
             if args.check.fail_fast && !unversioned.is_empty() {
                 return Ok(SearchResult::Unversioned {
                     unversioned: vec![path.to_path_buf()],
                 });
             }
 
-            let entry = entry.unwrap();
+            let Ok(entry) = entry else {
+                unknown.push(path.to_path_buf());
+                continue;
+            };
+
             let path = entry.path();
             let Ok(file_type) = entry.file_type() else {
-                unversioned.push(path);
+                if !args.check.skip_unversioned {
+                    unversioned.push(path);
+                }
                 continue;
             };
 
             if !file_type.is_dir() {
-                unversioned.push(path);
+                if !args.check.skip_unversioned {
+                    unversioned.push(path);
+                }
                 continue;
             }
 
-            let normalized = matcher.normalize(&path).unwrap();
+            let Some(normalized) = matcher.normalize(&path) else {
+                unknown.push(path);
+                continue;
+            };
+
             if matcher.matched(&normalized, true).is_ignore() {
                 continue;
             }
 
             if !matcher.matched(normalized, true).should_descend() {
-                unversioned.push(path);
+                if !args.check.skip_unversioned {
+                    unversioned.push(path);
+                }
                 continue;
             }
 
-            if std::fs::exists(path.join(".git")).is_ok_and(|v| v) {
+            let Ok(git_folder_exists) = std::fs::exists(path.join(".git")) else {
+                unknown.push(path);
+                continue;
+            };
+
+            if git_folder_exists {
                 versioned.push(path);
                 continue;
             }
 
-            match SearchResult::recursive_search(args, matcher, &path)? {
-                SearchResult::Unversioned { unversioned: mut u } => unversioned.append(&mut u),
+            let Ok(result) = SearchResult::recursive_search(args, matcher, &path) else {
+                unknown.push(path);
+                continue;
+            };
+
+            match result {
+                SearchResult::Unversioned { unversioned: mut u } => {
+                    if !args.check.skip_unversioned {
+                        unversioned.append(&mut u)
+                    }
+                }
                 SearchResult::Mixed {
                     versioned: mut v,
                     unversioned: mut u,
+                    unknown: mut w,
                 } => {
-                    unversioned.append(&mut u);
+                    if !args.check.skip_unversioned {
+                        unversioned.append(&mut u);
+                    }
                     versioned.append(&mut v);
+                    unknown.append(&mut w);
                 }
                 SearchResult::Versioned { versioned: mut v } => versioned.append(&mut v),
+                SearchResult::Unknown { unknown: mut w } => unknown.append(&mut w),
                 SearchResult::Empty => {}
             }
         }
 
-        match (versioned.len(), unversioned.len()) {
-            (0, 0) => Ok(SearchResult::Empty),
-            (0, _) => Ok(SearchResult::Unversioned {
+        match (versioned.len(), unversioned.len(), unknown.len()) {
+            (0, 0, 0) => Ok(SearchResult::Empty),
+            (0, 0, _) => Ok(SearchResult::Unknown {
+                unknown: vec![path.to_path_buf()],
+            }),
+            (0, _, 0) => Ok(SearchResult::Unversioned {
                 unversioned: vec![path.to_path_buf()],
             }),
-            (_, 0) => Ok(SearchResult::Versioned { versioned }),
-            (_, _) => Ok(SearchResult::Mixed {
+            (_, 0, 0) => Ok(SearchResult::Versioned { versioned }),
+            (_, _, _) => Ok(SearchResult::Mixed {
                 versioned,
                 unversioned,
+                unknown,
             }),
         }
     }

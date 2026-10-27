@@ -3,8 +3,9 @@ mod display;
 mod git;
 mod search;
 
+use std::io::IsTerminal;
+use std::path::PathBuf;
 use std::process::ExitCode;
-use std::{io::IsTerminal, path::Path};
 
 use anyhow::Result;
 use clap::Parser;
@@ -13,11 +14,12 @@ use search::SearchResult;
 use termcolor::{ColorChoice, StandardStream};
 
 use crate::display::display;
+use crate::git::CheckError;
 
 #[derive(Debug)]
-struct Outdated<'a> {
-    repo: &'a Path,
-    error: anyhow::Error,
+struct NotOk {
+    repo: PathBuf,
+    error: CheckError,
 }
 
 fn main() -> Result<ExitCode> {
@@ -25,9 +27,7 @@ fn main() -> Result<ExitCode> {
 
     let search_result = SearchResult::try_at(&args)?;
     let unversioned = search_result.unversioned();
-    if args.check.fail_fast && !unversioned.is_empty() {
-        todo!()
-    }
+    let unknown = search_result.unknown();
 
     let mut ok = Vec::with_capacity(search_result.versioned().len());
     let mut nok = Vec::with_capacity(unversioned.len() + search_result.unknown().len());
@@ -36,7 +36,14 @@ fn main() -> Result<ExitCode> {
         error: CheckError::Unversioned,
     }));
 
-    if !args.check.skip_git {
+    nok.extend(unknown.iter().map(|v| NotOk {
+        repo: v.to_path_buf(),
+        error: CheckError::Unknown,
+    }));
+
+    if !args.check.skip_git
+        && !(args.check.fail_fast && (!unversioned.is_empty() || !unknown.is_empty()))
+    {
         for repo in search_result.versioned() {
             let check_result = git::check(&args, repo.as_path());
             let Err(error) = check_result else {
@@ -44,7 +51,10 @@ fn main() -> Result<ExitCode> {
                 continue;
             };
 
-            outdated.push(Outdated { repo, error });
+            nok.push(NotOk {
+                repo: repo.to_path_buf(),
+                error,
+            });
             if args.check.fail_fast {
                 break;
             }
