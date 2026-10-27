@@ -1,6 +1,6 @@
 use std::{fmt::Display, path::PathBuf};
 
-use clap::{ArgAction, Args, Parser, ValueEnum};
+use clap::{Args, Parser, ValueEnum};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -88,15 +88,6 @@ pub struct CheckArgs {
 
 #[derive(Args, Debug)]
 pub struct OutputArgs {
-    #[arg(long, default_value_t = false)]
-    pub show_versioned: bool,
-
-    #[arg(long, default_value_t = true, action = ArgAction::Set)]
-    pub show_outdated: bool,
-
-    #[arg(long, default_value_t = false)]
-    pub show_unversioned: bool,
-
     #[arg(long, default_value_t)]
     pub color: Color,
 
@@ -106,11 +97,28 @@ pub struct OutputArgs {
     #[arg(long, default_value_t = false)]
     pub all_to_stdout: bool,
 
+    // TODO: only on json and count
     #[arg(long, default_value_t = false)]
     pub no_new_line: bool,
 
     #[arg(long, default_value_t = false)]
     pub quiet: bool,
+
+    // Human display options
+    #[arg(long, default_value_t = false)]
+    pub show_versioned: bool,
+
+    #[arg(long, default_value_t = false)]
+    pub skip_outdated: bool,
+
+    #[arg(long, default_value_t = false)]
+    pub skip_unversioned: bool,
+
+    #[arg(long, default_value_t = false)]
+    pub skip_headings: bool,
+
+    // TODO: Add option to sort
+    // TODO: add option to group by reason
 }
 
 #[derive(Debug, Default, Clone, ValueEnum)]

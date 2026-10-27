@@ -51,13 +51,13 @@ fn display_std(
         }
     }
 
-    if args.output.show_outdated && !outdated.is_empty() {
+    if !args.output.skip_outdated && !outdated.is_empty() {
         for o in outdated {
             eprintln!("{}", o.repo.display());
         }
     }
 
-    if args.output.show_unversioned && !results.unversioned().is_empty() {
+    if !args.output.skip_unversioned && !results.unversioned().is_empty() {
         for p in results.unversioned() {
             eprintln!("{}", p.display());
         }
@@ -75,52 +75,72 @@ fn display_human(
     outdated: &[Outdated],
 ) -> Result<()> {
     if !ok.is_empty() && args.output.show_versioned {
-        stdout.set_color(ColorSpec::new().set_fg(Some(Color::Cyan)).set_bold(true))?;
-        writeln!(stdout, "== OK")?;
-        stdout.reset()?;
+        if !args.output.skip_headings {
+            stdout.set_color(ColorSpec::new().set_fg(Some(Color::Cyan)).set_bold(true))?;
+            writeln!(stdout, "== OK")?;
+            stdout.reset()?;
+        }
 
         stdout.set_color(ColorSpec::new().set_fg(Some(Color::Green)).set_bold(false))?;
         for p in ok {
-            printa(stdout, stderr, args, &format!("{}", p.display()))?;
+            writeln!(stdout, "{}", p.display())?;
         }
         stdout.reset()?;
 
-        if (!outdated.is_empty() && args.output.show_outdated)
-            || (!results.unversioned().is_empty() && args.output.show_unversioned)
+        if (!outdated.is_empty() && !args.output.skip_outdated)
+            || (!results.unversioned().is_empty() && !args.output.skip_unversioned)
         {
             writeln!(stdout)?;
         }
     }
 
-    if !outdated.is_empty() && args.output.show_outdated {
-        stdout.set_color(ColorSpec::new().set_fg(Some(Color::Cyan)).set_bold(true))?;
-        writeln!(stdout, "== Outdated")?;
+    if !outdated.is_empty() && !args.output.skip_outdated {
+        if !args.output.skip_headings {
+            stdout.set_color(ColorSpec::new().set_fg(Some(Color::Cyan)).set_bold(true))?;
+            writeln!(stdout, "== Outdated")?;
+            stdout.reset()?;
+        }
 
         for o in outdated {
             stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)).set_bold(false))?;
             stderr.set_color(ColorSpec::new().set_fg(Some(Color::Red)).set_bold(false))?;
-            eprint(stdout, stderr, args, &format!("{}", o.repo.display()))?;
+            if args.output.all_to_stdout {
+                write!(stdout, "{}", o.repo.display())?;
+            } else {
+                write!(stderr, "{}", o.repo.display())?;
+            }
 
             stdout.reset()?;
             stderr.reset()?;
-            eprintln(stdout, stderr, args, &format!(": {}", o.error))?;
+            if args.output.all_to_stdout {
+                writeln!(stdout, ": {}", o.error)?;
+            } else {
+                writeln!(stderr, ": {}", o.error)?;
+            }
         }
         stdout.reset()?;
         stderr.reset()?;
 
-        if !results.unversioned().is_empty() && args.output.show_unversioned {
+        if !results.unversioned().is_empty() && !args.output.skip_unversioned {
             writeln!(stdout)?;
         }
     }
 
-    if !results.unversioned().is_empty() && args.output.show_unversioned {
-        stdout.set_color(ColorSpec::new().set_fg(Some(Color::Cyan)).set_bold(true))?;
-        writeln!(stdout, "== Unversioned")?;
+    if !results.unversioned().is_empty() && !args.output.skip_unversioned {
+        if !args.output.skip_headings {
+            stdout.set_color(ColorSpec::new().set_fg(Some(Color::Cyan)).set_bold(true))?;
+            writeln!(stdout, "== Unversioned")?;
+            stdout.reset()?;
+        }
 
         stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)).set_bold(false))?;
         stderr.set_color(ColorSpec::new().set_fg(Some(Color::Red)).set_bold(false))?;
         for p in results.unversioned() {
-            eprinta(stdout, stderr, args, &format!("{}", p.display()))?;
+            if args.output.all_to_stdout {
+                writeln!(stdout, "{}", p.display())?;
+            } else {
+                writeln!(stderr, "{}", p.display())?;
+            }
         }
         stdout.reset()?;
         stderr.reset()?;
@@ -131,22 +151,20 @@ fn display_human(
 
 fn display_json(
     stdout: &mut StandardStream,
-    stderr: &mut StandardStream,
-    args: &Cli,
+    _stderr: &mut StandardStream,
+    _args: &Cli,
     results: &SearchResult,
     ok: &[&PathBuf],
     outdated: &[Outdated],
 ) -> Result<()> {
-    printa(
+    writeln!(
         stdout,
-        stderr,
-        args,
-        &serde_json::to_string(&json!({
+        "{}",
+        serde_json::to_string(&json!({
             "ok": ok,
             "outdated": outdated,
             "unversioned": results.unversioned(),
-        }))
-        .unwrap(),
+        }))?
     )?;
 
     Ok(())
@@ -161,21 +179,25 @@ fn display_count(
     outdated: &[Outdated],
 ) -> Result<()> {
     let count = results.unversioned().len() + outdated.len();
-    eprinta(stdout, stderr, args, &format!("{count}"))?;
+    if args.output.all_to_stdout {
+        writeln!(stdout, "{count}")?;
+    } else {
+        writeln!(stderr, "{count}")?;
+    }
 
     Ok(())
 }
 
 fn display_count_versioned(
     stdout: &mut StandardStream,
-    stderr: &mut StandardStream,
-    args: &Cli,
+    _stderr: &mut StandardStream,
+    _args: &Cli,
     results: &SearchResult,
     _ok: &[&PathBuf],
     _outdated: &[Outdated],
 ) -> Result<()> {
     let count = results.versioned().len();
-    printa(stdout, stderr, args, &format!("{count}"))?;
+    writeln!(stdout, "{count}")?;
 
     Ok(())
 }
@@ -189,7 +211,11 @@ fn display_count_unversioned(
     _outdated: &[Outdated],
 ) -> Result<()> {
     let count = results.unversioned().len();
-    eprinta(stdout, stderr, args, &format!("{count}"))?;
+    if args.output.all_to_stdout {
+        writeln!(stdout, "{count}")?;
+    } else {
+        writeln!(stderr, "{count}")?;
+    }
 
     Ok(())
 }
@@ -203,89 +229,27 @@ fn display_count_outdated(
     outdated: &[Outdated],
 ) -> Result<()> {
     let count = outdated.len();
-    eprinta(stdout, stderr, args, &format!("{count}"))?;
+    if args.output.all_to_stdout {
+        writeln!(stdout, "{count}")?;
+    } else {
+        writeln!(stderr, "{count}")?;
+    }
 
     Ok(())
 }
 
 fn display_count_up_to_date(
     stdout: &mut StandardStream,
-    stderr: &mut StandardStream,
-    args: &Cli,
+    _stderr: &mut StandardStream,
+    _args: &Cli,
     _results: &SearchResult,
     ok: &[&PathBuf],
     _outdated: &[Outdated],
 ) -> Result<()> {
     let count = ok.len();
-    printa(stdout, stderr, args, &format!("{count}"))?;
+    writeln!(stdout, "{count}")?;
 
     Ok(())
-}
-
-fn print(
-    stdout: &mut StandardStream,
-    _stderr: &mut StandardStream,
-    _args: &Cli,
-    s: &str,
-) -> Result<(), std::io::Error> {
-    write!(stdout, "{s}")
-}
-
-fn println(
-    stdout: &mut StandardStream,
-    _stderr: &mut StandardStream,
-    _args: &Cli,
-    s: &str,
-) -> Result<(), std::io::Error> {
-    writeln!(stdout, "{s}")
-}
-
-fn eprint(
-    _stdout: &mut StandardStream,
-    stderr: &mut StandardStream,
-    _args: &Cli,
-    s: &str,
-) -> Result<(), std::io::Error> {
-    write!(stderr, "{s}")
-}
-
-fn eprintln(
-    _stdout: &mut StandardStream,
-    stderr: &mut StandardStream,
-    _args: &Cli,
-    s: &str,
-) -> Result<(), std::io::Error> {
-    writeln!(stderr, "{s}")
-}
-
-fn printa(
-    stdout: &mut StandardStream,
-    stderr: &mut StandardStream,
-    args: &Cli,
-    s: &str,
-) -> Result<(), std::io::Error> {
-    if args.output.no_new_line {
-        print(stdout, stderr, args, s)
-    } else {
-        println(stdout, stderr, args, s)
-    }
-}
-
-fn eprinta(
-    stdout: &mut StandardStream,
-    stderr: &mut StandardStream,
-    args: &Cli,
-    s: &str,
-) -> Result<(), std::io::Error> {
-    if args.output.all_to_stdout {
-        printa(stdout, stderr, args, s)
-    } else {
-        if args.output.no_new_line {
-            eprint(stdout, stderr, args, s)
-        } else {
-            eprintln(stdout, stderr, args, s)
-        }
-    }
 }
 
 impl Serialize for Outdated<'_> {
