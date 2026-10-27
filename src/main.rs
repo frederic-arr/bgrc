@@ -51,6 +51,11 @@ fn main() -> Result<ExitCode> {
         }
     }
 
+    if args.output.sort {
+        ok.sort();
+        nok.sort_by(|a, b| a.repo.cmp(&b.repo));
+    }
+
     let color_choice = match args.output.color {
         cli::Color::Auto if !std::io::stdin().is_terminal() => ColorChoice::Never,
         cli::Color::Auto => ColorChoice::Auto,
