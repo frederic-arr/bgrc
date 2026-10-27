@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Result, anyhow};
 use ignore::{IncrementalIgnore, WalkBuilder, overrides::OverrideBuilder};
 
-use crate::Args;
+use crate::Cli;
 
 const COMMON_EXCLUDE: [&str; 9] = [
     "node_modules",
@@ -33,34 +33,34 @@ pub enum SearchResult {
 }
 
 impl SearchResult {
-    pub fn try_at(args: &Args) -> Result<SearchResult> {
+    pub fn try_at(args: &Cli) -> Result<SearchResult> {
         let mut overrides = &mut OverrideBuilder::new(&args.path);
-        if args.use_common_filters {
+        if args.search.use_common_filters {
             for path in COMMON_EXCLUDE {
                 overrides = overrides.add(&format!("!{path}").to_string())?;
             }
         }
 
-        for glob in &args.ignore {
+        for glob in &args.search.ignore {
             overrides = overrides.add(&format!("!{{{glob}}}")).unwrap();
         }
 
         let mut builder = WalkBuilder::new(&args.path);
         let builder = builder
-            .max_depth(Some(args.depth))
-            .hidden(!args.no_hidden)
-            .parents(!args.no_parents)
-            .ignore(!args.no_ignore)
-            .git_ignore(!args.no_git_ignore)
-            .git_global(!args.no_git_global)
-            .git_exclude(!args.no_git_exclude)
-            .follow_links(!args.no_follow_link)
-            .require_git(!args.no_require_git)
-            .ignore_case_insensitive(!args.no_ignore_file_case_insensitive)
-            .same_file_system(args.one_file_system)
+            .max_depth(Some(args.search.depth))
+            .hidden(!args.search.no_hidden)
+            .parents(!args.search.no_parents)
+            .ignore(!args.search.no_ignore)
+            .git_ignore(!args.search.no_git_ignore)
+            .git_global(!args.search.no_git_global)
+            .git_exclude(!args.search.no_git_exclude)
+            .follow_links(!args.search.no_follow_link)
+            .require_git(!args.search.no_require_git)
+            .ignore_case_insensitive(!args.search.no_ignore_file_case_insensitive)
+            .same_file_system(args.search.one_file_system)
             .overrides(overrides.build()?);
 
-        for path in &args.ignore_file {
+        for path in &args.search.ignore_file {
             builder.add_ignore(path).map_or(Ok(()), Err)?;
         }
 
@@ -92,7 +92,7 @@ impl SearchResult {
     }
 
     fn recursive_search(
-        args: &Args,
+        args: &Cli,
         matcher: &mut IncrementalIgnore,
         path: &Path,
     ) -> Result<SearchResult> {
@@ -100,7 +100,7 @@ impl SearchResult {
         let mut unversioned = vec![];
 
         for entry in std::fs::read_dir(path)? {
-            if args.fail_fast && !unversioned.is_empty() {
+            if args.check.fail_fast && !unversioned.is_empty() {
                 return Ok(SearchResult::Unversioned {
                     unversioned: vec![path.to_path_buf()],
                 });

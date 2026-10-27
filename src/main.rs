@@ -3,12 +3,12 @@ mod display;
 mod git;
 mod search;
 
-use std::path::Path;
 use std::process::ExitCode;
+use std::{io::IsTerminal, path::Path};
 
 use anyhow::Result;
 use clap::Parser;
-use cli::Args;
+use cli::Cli;
 use search::SearchResult;
 use termcolor::{ColorChoice, StandardStream};
 
@@ -21,18 +21,18 @@ struct Outdated<'a> {
 }
 
 fn main() -> Result<ExitCode> {
-    let args = Args::parse();
+    let args = Cli::parse();
 
     let search_result = SearchResult::try_at(&args)?;
     let unversioned = search_result.unversioned();
-    if args.fail_fast && !unversioned.is_empty() {
+    if args.check.fail_fast && !unversioned.is_empty() {
         todo!()
     }
 
     let mut ok = Vec::with_capacity(search_result.versioned().len());
     let mut outdated = Vec::with_capacity(search_result.versioned().len());
 
-    if args.git {
+    if !args.check.skip_git {
         for repo in search_result.versioned() {
             let check_result = git::check(&args, repo.as_path());
             let Err(error) = check_result else {
@@ -41,13 +41,14 @@ fn main() -> Result<ExitCode> {
             };
 
             outdated.push(Outdated { repo, error });
-            if args.fail_fast {
+            if args.check.fail_fast {
                 break;
             }
         }
     }
 
-    let color_choice = match args.color {
+    let color_choice = match args.output.color {
+        cli::Color::Auto if !std::io::stdin().is_terminal() => ColorChoice::Never,
         cli::Color::Auto => ColorChoice::Auto,
         cli::Color::Never => ColorChoice::Never,
         cli::Color::Always => ColorChoice::Always,

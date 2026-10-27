@@ -2,7 +2,7 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use crate::Outdated;
-use crate::cli::{Args, Format};
+use crate::cli::{Cli, Format};
 use crate::search::SearchResult;
 use anyhow::Result;
 use serde::Serialize;
@@ -12,12 +12,12 @@ use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
 pub fn display(
     stdout: &mut StandardStream,
     stderr: &mut StandardStream,
-    args: &Args,
+    args: &Cli,
     results: &SearchResult,
     ok: &[&PathBuf],
     outdated: &[Outdated],
 ) -> Result<()> {
-    match args.format {
+    match args.output.format {
         Format::Std => display_std(stdout, stderr, args, results, ok, outdated),
         Format::Human => display_human(stdout, stderr, args, results, ok, outdated),
         Format::Json => display_json(stdout, stderr, args, results, ok, outdated),
@@ -40,31 +40,28 @@ pub fn display(
 fn display_std(
     _stdout: &mut StandardStream,
     _stderr: &mut StandardStream,
-    args: &Args,
+    args: &Cli,
     results: &SearchResult,
     ok: &[&PathBuf],
     outdated: &[Outdated],
 ) -> Result<()> {
-    if args.show_versioned
-        && !ok.is_empty() {
-            for p in ok {
-                println!("{}", p.display());
-            }
+    if args.output.show_versioned && !ok.is_empty() {
+        for p in ok {
+            println!("{}", p.display());
         }
+    }
 
-    if args.show_outdated
-        && !outdated.is_empty() {
-            for o in outdated {
-                eprintln!("{}", o.repo.display());
-            }
+    if args.output.show_outdated && !outdated.is_empty() {
+        for o in outdated {
+            eprintln!("{}", o.repo.display());
         }
+    }
 
-    if args.show_unversioned
-        && !results.unversioned().is_empty() {
-            for p in results.unversioned() {
-                eprintln!("{}", p.display());
-            }
+    if args.output.show_unversioned && !results.unversioned().is_empty() {
+        for p in results.unversioned() {
+            eprintln!("{}", p.display());
         }
+    }
 
     Ok(())
 }
@@ -72,12 +69,12 @@ fn display_std(
 fn display_human(
     stdout: &mut StandardStream,
     stderr: &mut StandardStream,
-    args: &Args,
+    args: &Cli,
     results: &SearchResult,
     ok: &[&PathBuf],
     outdated: &[Outdated],
 ) -> Result<()> {
-    if !ok.is_empty() && args.show_versioned {
+    if !ok.is_empty() && args.output.show_versioned {
         stdout.set_color(ColorSpec::new().set_fg(Some(Color::Cyan)).set_bold(true))?;
         writeln!(stdout, "== OK")?;
         stdout.reset()?;
@@ -88,14 +85,14 @@ fn display_human(
         }
         stdout.reset()?;
 
-        if (!outdated.is_empty() && args.show_outdated)
-            || (!results.unversioned().is_empty() && args.show_unversioned)
+        if (!outdated.is_empty() && args.output.show_outdated)
+            || (!results.unversioned().is_empty() && args.output.show_unversioned)
         {
             writeln!(stdout)?;
         }
     }
 
-    if !outdated.is_empty() && args.show_outdated {
+    if !outdated.is_empty() && args.output.show_outdated {
         stdout.set_color(ColorSpec::new().set_fg(Some(Color::Cyan)).set_bold(true))?;
         writeln!(stdout, "== Outdated")?;
 
@@ -111,12 +108,12 @@ fn display_human(
         stdout.reset()?;
         stderr.reset()?;
 
-        if !results.unversioned().is_empty() && args.show_unversioned {
+        if !results.unversioned().is_empty() && args.output.show_unversioned {
             writeln!(stdout)?;
         }
     }
 
-    if !results.unversioned().is_empty() && args.show_unversioned {
+    if !results.unversioned().is_empty() && args.output.show_unversioned {
         stdout.set_color(ColorSpec::new().set_fg(Some(Color::Cyan)).set_bold(true))?;
         writeln!(stdout, "== Unversioned")?;
 
@@ -135,7 +132,7 @@ fn display_human(
 fn display_json(
     stdout: &mut StandardStream,
     stderr: &mut StandardStream,
-    args: &Args,
+    args: &Cli,
     results: &SearchResult,
     ok: &[&PathBuf],
     outdated: &[Outdated],
@@ -158,7 +155,7 @@ fn display_json(
 fn display_count(
     stdout: &mut StandardStream,
     stderr: &mut StandardStream,
-    args: &Args,
+    args: &Cli,
     results: &SearchResult,
     _ok: &[&PathBuf],
     outdated: &[Outdated],
@@ -172,7 +169,7 @@ fn display_count(
 fn display_count_versioned(
     stdout: &mut StandardStream,
     stderr: &mut StandardStream,
-    args: &Args,
+    args: &Cli,
     results: &SearchResult,
     _ok: &[&PathBuf],
     _outdated: &[Outdated],
@@ -186,7 +183,7 @@ fn display_count_versioned(
 fn display_count_unversioned(
     stdout: &mut StandardStream,
     stderr: &mut StandardStream,
-    args: &Args,
+    args: &Cli,
     results: &SearchResult,
     _ok: &[&PathBuf],
     _outdated: &[Outdated],
@@ -200,7 +197,7 @@ fn display_count_unversioned(
 fn display_count_outdated(
     stdout: &mut StandardStream,
     stderr: &mut StandardStream,
-    args: &Args,
+    args: &Cli,
     _results: &SearchResult,
     _ok: &[&PathBuf],
     outdated: &[Outdated],
@@ -214,7 +211,7 @@ fn display_count_outdated(
 fn display_count_up_to_date(
     stdout: &mut StandardStream,
     stderr: &mut StandardStream,
-    args: &Args,
+    args: &Cli,
     _results: &SearchResult,
     ok: &[&PathBuf],
     _outdated: &[Outdated],
@@ -228,7 +225,7 @@ fn display_count_up_to_date(
 fn print(
     stdout: &mut StandardStream,
     _stderr: &mut StandardStream,
-    _args: &Args,
+    _args: &Cli,
     s: &str,
 ) -> Result<(), std::io::Error> {
     write!(stdout, "{s}")
@@ -237,7 +234,7 @@ fn print(
 fn println(
     stdout: &mut StandardStream,
     _stderr: &mut StandardStream,
-    _args: &Args,
+    _args: &Cli,
     s: &str,
 ) -> Result<(), std::io::Error> {
     writeln!(stdout, "{s}")
@@ -246,7 +243,7 @@ fn println(
 fn eprint(
     _stdout: &mut StandardStream,
     stderr: &mut StandardStream,
-    _args: &Args,
+    _args: &Cli,
     s: &str,
 ) -> Result<(), std::io::Error> {
     write!(stderr, "{s}")
@@ -255,7 +252,7 @@ fn eprint(
 fn eprintln(
     _stdout: &mut StandardStream,
     stderr: &mut StandardStream,
-    _args: &Args,
+    _args: &Cli,
     s: &str,
 ) -> Result<(), std::io::Error> {
     writeln!(stderr, "{s}")
@@ -264,10 +261,10 @@ fn eprintln(
 fn printa(
     stdout: &mut StandardStream,
     stderr: &mut StandardStream,
-    args: &Args,
+    args: &Cli,
     s: &str,
 ) -> Result<(), std::io::Error> {
-    if args.no_new_line {
+    if args.output.no_new_line {
         print(stdout, stderr, args, s)
     } else {
         println(stdout, stderr, args, s)
@@ -277,13 +274,13 @@ fn printa(
 fn eprinta(
     stdout: &mut StandardStream,
     stderr: &mut StandardStream,
-    args: &Args,
+    args: &Cli,
     s: &str,
 ) -> Result<(), std::io::Error> {
-    if args.all_to_stdout {
+    if args.output.all_to_stdout {
         printa(stdout, stderr, args, s)
     } else {
-        if args.no_new_line {
+        if args.output.no_new_line {
             eprint(stdout, stderr, args, s)
         } else {
             eprintln(stdout, stderr, args, s)

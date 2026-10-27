@@ -1,13 +1,24 @@
 use std::{fmt::Display, path::PathBuf};
 
-use clap::{ArgAction, Parser, ValueEnum};
+use clap::{ArgAction, Args, Parser, ValueEnum};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
-pub struct Args {
+pub struct Cli {
     pub path: PathBuf,
 
-    // Search options
+    #[command(flatten, next_help_heading = "Search options")]
+    pub search: SearchArgs,
+
+    #[command(flatten, next_help_heading = "Check options")]
+    pub check: CheckArgs,
+
+    #[command(flatten, next_help_heading = "Output options")]
+    pub output: OutputArgs,
+}
+
+#[derive(Args, Debug)]
+pub struct SearchArgs {
     #[arg(short, long, default_value_t = 5)]
     pub depth: usize,
 
@@ -49,10 +60,12 @@ pub struct Args {
 
     #[arg(long, default_value_t = false)]
     pub one_file_system: bool,
+}
 
-    // Check options
-    #[arg(short, long, default_value_t = true, action = ArgAction::Set)]
-    pub git: bool,
+#[derive(Args, Debug)]
+pub struct CheckArgs {
+    #[arg(short = 'g', long, default_value_t = false)]
+    pub skip_git: bool,
 
     #[arg(long, default_value = "git")]
     pub git_path: PathBuf,
@@ -71,8 +84,10 @@ pub struct Args {
 
     #[arg(long, default_value_t = false)]
     pub fail_fast: bool,
+}
 
-    // Output options
+#[derive(Args, Debug)]
+pub struct OutputArgs {
     #[arg(long, default_value_t = false)]
     pub show_versioned: bool,
 
