@@ -50,11 +50,13 @@ fn display_std(
     Ok(())
 }
 
-fn create_groups(args: &Cli, ko: &[NotOk]) -> (usize, Vec<(&'static str, CheckError, Vec<PathBuf>)>) {
+fn create_groups(
+    args: &Cli,
+    ko: &[NotOk],
+) -> (usize, Vec<(&'static str, CheckError, Vec<PathBuf>)>) {
     let mut groups = Vec::with_capacity(10);
-
     groups.push(("unknown", CheckError::Unknown));
-    
+
     if !args.check.skip_unversioned {
         groups.push(("unversioned", CheckError::Unversioned));
     }
