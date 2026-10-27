@@ -30,7 +30,11 @@ fn main() -> Result<ExitCode> {
     }
 
     let mut ok = Vec::with_capacity(search_result.versioned().len());
-    let mut outdated = Vec::with_capacity(search_result.versioned().len());
+    let mut nok = Vec::with_capacity(unversioned.len() + search_result.unknown().len());
+    nok.extend(unversioned.iter().map(|v| NotOk {
+        repo: v.to_path_buf(),
+        error: CheckError::Unversioned,
+    }));
 
     if !args.check.skip_git {
         for repo in search_result.versioned() {
@@ -57,16 +61,9 @@ fn main() -> Result<ExitCode> {
     let mut stdout = StandardStream::stdout(color_choice);
     let mut stderr = StandardStream::stderr(color_choice);
 
-    display(
-        &mut stdout,
-        &mut stderr,
-        &args,
-        &search_result,
-        &ok,
-        &outdated,
-    )?;
+    display(&mut stdout, &mut stderr, &args, &ok, &nok)?;
 
-    if (search_result.unversioned().len() + outdated.len()) == 0 {
+    if (search_result.unversioned().len() + nok.len()) == 0 {
         Ok(ExitCode::SUCCESS)
     } else {
         Ok(ExitCode::FAILURE)

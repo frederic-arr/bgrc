@@ -1,25 +1,47 @@
 use std::path::Path;
 use std::process::Command;
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{Result, ensure};
+use thiserror::Error;
 
 use crate::Cli;
 
-pub fn check(args: &Cli, at: &Path) -> Result<()> {
+#[derive(Clone, Copy, Error, Debug, PartialEq, Eq)]
+pub enum CheckError {
+    #[error("Unclean worktree")]
+    UncleanWorktree,
+
+    #[error("Stashed changes")]
+    StashedChanges,
+
+    #[error("Fetch failure")]
+    FetchFailure,
+
+    #[error("Unpushed references")]
+    UnpushedReferences,
+
+    #[error("Unversioned")]
+    Unversioned,
+
+    #[error("Unknown")]
+    Unknown,
+}
+
+pub fn check(args: &Cli, at: &Path) -> std::result::Result<(), CheckError> {
     if !args.check.skip_worktree {
-        has_no_uncommitted_files(args, at).context("worktree is not clean")?;
+        has_no_uncommitted_files(args, at).map_err(|_| CheckError::UncleanWorktree)?;
     }
 
     if !args.check.skip_stash {
-        has_no_stashed_changes(args, at).context("has stashed changes")?;
+        has_no_stashed_changes(args, at).map_err(|_| CheckError::StashedChanges)?;
     }
 
     if !args.check.offline && !args.check.skip_unpushed_commits {
-        fetch(args, at).context("failed to fetch")?;
+        fetch(args, at).map_err(|_| CheckError::FetchFailure)?;
     }
 
     if !args.check.skip_unpushed_commits {
-        has_no_unpushed_commits(args, at).context("has unpushed references")?;
+        has_no_unpushed_commits(args, at).map_err(|_| CheckError::UnpushedReferences)?;
     }
 
     Ok(())

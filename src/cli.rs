@@ -64,6 +64,9 @@ pub struct SearchArgs {
 
 #[derive(Args, Debug)]
 pub struct CheckArgs {
+    #[arg(long, default_value_t = false)]
+    pub skip_unversioned: bool,
+
     #[arg(short = 'g', long, default_value_t = false)]
     pub skip_git: bool,
 
@@ -106,19 +109,22 @@ pub struct OutputArgs {
 
     // Human display options
     #[arg(long, default_value_t = false)]
-    pub show_versioned: bool,
+    pub show_ok: bool,
 
     #[arg(long, default_value_t = false)]
     pub skip_outdated: bool,
 
     #[arg(long, default_value_t = false)]
-    pub skip_unversioned: bool,
+    pub hide_headings: bool,
+    
+    #[arg(long, default_value_t = false)]
+    pub hide_empty: bool,
 
     #[arg(long, default_value_t = false)]
-    pub skip_headings: bool,
+    pub sort: bool,
 
-    // TODO: Add option to sort
-    // TODO: add option to group by reason
+    #[arg(long, default_value_t = false)]
+    pub group: bool,
 }
 
 #[derive(Debug, Default, Clone, ValueEnum)]
