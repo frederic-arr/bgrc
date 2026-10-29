@@ -50,10 +50,9 @@ fn display_std(
     Ok(())
 }
 
-fn create_groups<'a>(
-    args: &Cli,
-    ko: &'a [NotOk],
-) -> (usize, Vec<(&'static str, CheckError, Vec<&'a NotOk>)>) {
+type Grouping<'a> = Vec<(&'static str, CheckError, Vec<&'a NotOk>)>;
+
+fn create_groups<'a>(args: &Cli, ko: &'a [NotOk]) -> (usize, Grouping<'a>) {
     let mut groups = Vec::with_capacity(10);
     groups.push(("unknown", CheckError::Unknown(String::new())));
 
@@ -99,7 +98,7 @@ fn create_groups<'a>(
     (total, output_groups)
 }
 
-fn display_group<'a>(
+fn display_group(
     stdout: &mut StandardStream,
     stderr: &mut StandardStream,
     args: &Cli,
@@ -139,7 +138,7 @@ fn display_group<'a>(
             stream.reset()?;
         }
 
-        writeln!(stream, "")?;
+        writeln!(stream)?;
     }
 
     Ok(())
@@ -188,7 +187,7 @@ fn display_human(
 
             remaining -= values.len();
             if remaining > 0 {
-                writeln!(stdout, "")?;
+                writeln!(stdout)?;
             }
         }
     } else {
@@ -196,7 +195,7 @@ fn display_human(
         display_group(stdout, stderr, args, "Not ok", &v, true)?;
     }
 
-    if ko.len() == 0 {
+    if ko.is_empty() {
         stdout.set_color(ColorSpec::new().set_fg(Some(termcolor::Color::Green)))?;
         writeln!(stdout, "All good, everything is versioned.")?;
         stdout.reset()?;
@@ -238,7 +237,7 @@ fn display_json(
     write!(stdout, "{}", serde_json::to_string(&data)?)?;
 
     if !args.output.no_new_line {
-        writeln!(stdout, "")?;
+        writeln!(stdout)?;
     }
 
     Ok(())
