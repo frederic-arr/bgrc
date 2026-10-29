@@ -50,12 +50,12 @@ fn display_std(
     Ok(())
 }
 
-fn create_groups(
+fn create_groups<'a>(
     args: &Cli,
-    ko: &[NotOk],
-) -> (usize, Vec<(&'static str, CheckError, Vec<PathBuf>)>) {
+    ko: &'a [NotOk],
+) -> (usize, Vec<(&'static str, CheckError, Vec<&'a NotOk>)>) {
     let mut groups = Vec::with_capacity(10);
-    groups.push(("unknown", CheckError::Unknown));
+    groups.push(("unknown", CheckError::Unknown(String::new())));
 
     if !args.check.skip_unversioned {
         groups.push(("unversioned", CheckError::Unversioned));
@@ -80,18 +80,20 @@ fn create_groups(
     let mut output_groups = Vec::with_capacity(groups.len());
     let mut total = 0;
     for (k, group) in &mut groups {
-        let values = ko
-            .iter()
-            .filter(|v| v.error == *group)
-            .map(|v| v.repo.to_path_buf())
-            .collect::<Vec<_>>();
+        let values = if let CheckError::Unknown(_) = group {
+            ko.iter()
+                .filter(|v| matches!(v.error, CheckError::Unknown(_)))
+                .collect::<Vec<_>>()
+        } else {
+            ko.iter().filter(|v| v.error == *group).collect::<Vec<_>>()
+        };
         total += values.len();
 
         if values.is_empty() && args.output.hide_empty {
             continue;
         }
 
-        output_groups.push((*k, *group, values));
+        output_groups.push((*k, group.clone(), values));
     }
 
     (total, output_groups)
@@ -102,7 +104,8 @@ fn display_group<'a>(
     stderr: &mut StandardStream,
     args: &Cli,
     heading: &str,
-    values: &[PathBuf],
+    values: &[&NotOk],
+    show_error: bool,
 ) -> Result<()> {
     if values.is_empty() {
         return Ok(());
@@ -114,16 +117,29 @@ fn display_group<'a>(
         stdout.reset()?;
     }
 
+    let stream = if args.output.all_to_stdout {
+        stdout
+    } else {
+        stderr
+    };
+
     for v in values {
-        if args.output.all_to_stdout {
-            stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)).set_bold(false))?;
-            writeln!(stdout, "{}", v.display())?;
-            stdout.reset()?;
-        } else {
-            stderr.set_color(ColorSpec::new().set_fg(Some(Color::Red)).set_bold(false))?;
-            writeln!(stderr, "{}", v.display())?;
-            stderr.reset()?;
+        stream.set_color(ColorSpec::new().set_fg(Some(Color::Red)).set_bold(false))?;
+        write!(stream, "{}", v.repo.display())?;
+        stream.reset()?;
+
+        if show_error {
+            write!(stream, ": {:#}", v.error)?;
         }
+
+        if show_error && let Some(root) = &v.root {
+            write!(stream, " in ")?;
+            stream.set_color(ColorSpec::new().set_fg(Some(Color::Yellow)).set_bold(false))?;
+            write!(stream, "{}", root.display())?;
+            stream.reset()?;
+        }
+
+        writeln!(stream, "")?;
     }
 
     Ok(())
@@ -157,7 +173,18 @@ fn display_human(
                 continue;
             }
 
-            display_group(stdout, stderr, args, &group.to_string(), values.as_slice())?;
+            if matches!(group, CheckError::Unknown(_)) {
+                display_group(stdout, stderr, args, "Other", values.as_slice(), true)?;
+            } else {
+                display_group(
+                    stdout,
+                    stderr,
+                    args,
+                    &group.to_string(),
+                    values.as_slice(),
+                    false,
+                )?;
+            }
 
             remaining -= values.len();
             if remaining > 0 {
@@ -165,29 +192,8 @@ fn display_human(
             }
         }
     } else {
-        if !args.output.hide_headings && ko.len() > 0 {
-            stdout.set_color(ColorSpec::new().set_fg(Some(Color::Cyan)).set_bold(true))?;
-            writeln!(stdout, "== Not ok")?;
-            stdout.reset()?;
-        }
-
-        for v in ko {
-            if args.output.all_to_stdout {
-                stdout.set_color(ColorSpec::new().set_fg(Some(Color::Red)).set_bold(false))?;
-                write!(stdout, "{}", v.repo.display())?;
-                stdout.reset()?;
-            } else {
-                stderr.set_color(ColorSpec::new().set_fg(Some(Color::Red)).set_bold(false))?;
-                write!(stderr, "{}", v.repo.display())?;
-                stderr.reset()?;
-            }
-
-            if args.output.all_to_stdout {
-                writeln!(stdout, ": {}", v.error)?;
-            } else {
-                writeln!(stderr, ": {}", v.error)?;
-            }
-        }
+        let v = ko.iter().collect::<Vec<_>>();
+        display_group(stdout, stderr, args, "Not ok", &v, true)?;
     }
 
     if ko.len() == 0 {
@@ -218,7 +224,7 @@ fn display_json(
                 continue;
             }
 
-            data.insert(k, values);
+            data.insert(k, values.iter().map(|v| v.repo.to_path_buf()).collect());
         }
     } else {
         if ko.is_empty() && args.output.hide_empty {

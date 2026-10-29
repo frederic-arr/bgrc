@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Error, Result, anyhow};
 use ignore::{IncrementalIgnore, WalkBuilder, overrides::OverrideBuilder};
 
 use crate::Cli;
@@ -25,13 +25,13 @@ pub enum SearchResult {
     Mixed {
         versioned: Vec<PathBuf>,
         unversioned: Vec<PathBuf>,
-        unknown: Vec<PathBuf>,
+        unknown: Vec<(PathBuf, PathBuf, Error)>,
     },
     Versioned {
         versioned: Vec<PathBuf>,
     },
     Unknown {
-        unknown: Vec<PathBuf>,
+        unknown: Vec<(PathBuf, PathBuf, Error)>,
     },
     Empty,
 }
@@ -74,7 +74,11 @@ impl SearchResult {
             .ok_or(anyhow!("a matcher was expected"))?
             .clone();
 
-        SearchResult::recursive_search(args, &mut matcher, &args.path)
+        Ok(SearchResult::recursive_search(
+            args,
+            &mut matcher,
+            &args.path,
+        ))
     }
 
     pub fn versioned(&self) -> &[PathBuf] {
@@ -99,7 +103,7 @@ impl SearchResult {
         }
     }
 
-    pub fn unknown(&self) -> &[PathBuf] {
+    pub fn unknown(&self) -> &[(PathBuf, PathBuf, Error)] {
         match self {
             SearchResult::Unknown { unknown } | SearchResult::Mixed { unknown, .. } => {
                 unknown.as_slice()
@@ -110,31 +114,33 @@ impl SearchResult {
         }
     }
 
-    fn recursive_search(
-        args: &Cli,
-        matcher: &mut IncrementalIgnore,
-        path: &Path,
-    ) -> Result<SearchResult> {
+    fn recursive_search(args: &Cli, matcher: &mut IncrementalIgnore, root: &Path) -> SearchResult {
         let mut versioned = vec![];
         let mut unversioned = vec![];
-        let mut unknown: Vec<PathBuf> = vec![];
+        let mut unknown: Vec<(PathBuf, PathBuf, Error)> = vec![];
 
-        let Ok(iter) = std::fs::read_dir(path) else {
-            return Ok(SearchResult::Unknown {
-                unknown: vec![path.to_path_buf()],
-            });
+        let iter = match std::fs::read_dir(root).context("unable to read directory") {
+            Ok(v) => v,
+            Err(err) => {
+                return SearchResult::Unknown {
+                    unknown: vec![(root.to_path_buf(), root.to_path_buf(), err)],
+                };
+            }
         };
 
         for entry in iter {
             if args.check.fail_fast && !unversioned.is_empty() {
-                return Ok(SearchResult::Unversioned {
-                    unversioned: vec![path.to_path_buf()],
-                });
+                return SearchResult::Unversioned {
+                    unversioned: vec![root.to_path_buf()],
+                };
             }
 
-            let Ok(entry) = entry else {
-                unknown.push(path.to_path_buf());
-                continue;
+            let entry = match entry.context("unable to read content of directory") {
+                Ok(v) => v,
+                Err(err) => {
+                    unknown.push((root.to_path_buf(), root.to_path_buf(), err));
+                    continue;
+                }
             };
 
             let path = entry.path();
@@ -153,7 +159,11 @@ impl SearchResult {
             }
 
             let Some(normalized) = matcher.normalize(&path) else {
-                unknown.push(path);
+                unknown.push((
+                    root.to_path_buf(),
+                    path,
+                    anyhow!("unable to normalize path"),
+                ));
                 continue;
             };
 
@@ -168,9 +178,14 @@ impl SearchResult {
                 continue;
             }
 
-            let Ok(git_folder_exists) = std::fs::exists(path.join(".git")) else {
-                unknown.push(path);
-                continue;
+            let git_folder_exists = match std::fs::exists(path.join(".git"))
+                .context("unable to check for git folder")
+            {
+                Ok(v) => v,
+                Err(err) => {
+                    unknown.push((root.to_path_buf(), path.to_path_buf(), err));
+                    continue;
+                }
             };
 
             if git_folder_exists {
@@ -178,10 +193,7 @@ impl SearchResult {
                 continue;
             }
 
-            let Ok(result) = SearchResult::recursive_search(args, matcher, &path) else {
-                unknown.push(path);
-                continue;
-            };
+            let result = SearchResult::recursive_search(args, matcher, &path);
 
             match result {
                 SearchResult::Unversioned { unversioned: mut u } => {
@@ -207,19 +219,30 @@ impl SearchResult {
         }
 
         match (versioned.len(), unversioned.len(), unknown.len()) {
-            (0, 0, 0) => Ok(SearchResult::Empty),
-            (0, 0, _) => Ok(SearchResult::Unknown {
-                unknown: vec![path.to_path_buf()],
-            }),
-            (0, _, 0) => Ok(SearchResult::Unversioned {
-                unversioned: vec![path.to_path_buf()],
-            }),
-            (_, 0, 0) => Ok(SearchResult::Versioned { versioned }),
-            (_, _, _) => Ok(SearchResult::Mixed {
+            (0, 0, 0) => SearchResult::Empty,
+            (0, 0, 1) => {
+                for u in unknown.iter_mut() {
+                    u.0 = root.to_path_buf()
+                }
+                SearchResult::Unknown { unknown }
+            }
+            (0, 0, _) => {
+                unknown.push((
+                    root.to_path_buf(),
+                    root.to_path_buf(),
+                    anyhow!("unable to verify directory"),
+                ));
+                SearchResult::Unknown { unknown }
+            }
+            (0, _, 0) => SearchResult::Unversioned {
+                unversioned: vec![root.to_path_buf()],
+            },
+            (_, 0, 0) => SearchResult::Versioned { versioned },
+            (_, _, _) => SearchResult::Mixed {
                 versioned,
                 unversioned,
                 unknown,
-            }),
+            },
         }
     }
 }

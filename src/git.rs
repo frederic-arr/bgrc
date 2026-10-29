@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use crate::Cli;
 
-#[derive(Clone, Copy, Error, Debug, PartialEq, Eq)]
+#[derive(Clone, Error, Debug, PartialEq, Eq)]
 pub enum CheckError {
     #[error("Unclean worktree")]
     UncleanWorktree,
@@ -23,8 +23,8 @@ pub enum CheckError {
     #[error("Unversioned")]
     Unversioned,
 
-    #[error("Unknown")]
-    Unknown,
+    #[error("{0}")]
+    Unknown(String),
 }
 
 pub fn check(args: &Cli, at: &Path) -> std::result::Result<(), CheckError> {

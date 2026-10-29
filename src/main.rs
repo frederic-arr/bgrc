@@ -20,6 +20,7 @@ use crate::git::CheckError;
 struct NotOk {
     repo: PathBuf,
     error: CheckError,
+    root: Option<PathBuf>,
 }
 
 fn main() -> Result<ExitCode> {
@@ -34,11 +35,13 @@ fn main() -> Result<ExitCode> {
     nok.extend(unversioned.iter().map(|v| NotOk {
         repo: v.to_path_buf(),
         error: CheckError::Unversioned,
+        root: None,
     }));
 
     nok.extend(unknown.iter().map(|v| NotOk {
-        repo: v.to_path_buf(),
-        error: CheckError::Unknown,
+        repo: v.0.to_path_buf(),
+        error: CheckError::Unknown(format!("{:#}", v.2)),
+        root: Some(v.1.to_path_buf()),
     }));
 
     if !args.check.skip_git
@@ -54,6 +57,7 @@ fn main() -> Result<ExitCode> {
             nok.push(NotOk {
                 repo: repo.to_path_buf(),
                 error,
+                root: None,
             });
             if args.check.fail_fast {
                 break;
