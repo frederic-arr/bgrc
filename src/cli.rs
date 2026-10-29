@@ -116,7 +116,7 @@ pub struct OutputArgs {
 
     #[arg(long, default_value_t = false)]
     pub hide_headings: bool,
-    
+
     #[arg(long, default_value_t = false)]
     pub hide_empty: bool,
 
