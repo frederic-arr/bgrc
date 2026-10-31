@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// SPDX-FileCopyrightText: 2026 Frédéric ARROYO <opensource@frederic-arroyo.ch>
+
 mod cli;
 mod display;
 mod git;

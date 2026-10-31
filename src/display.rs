@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// SPDX-FileCopyrightText: 2026 Frédéric ARROYO <opensource@frederic-arroyo.ch>
+
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;

@@ -1,0 +1,29 @@
+"$schema" = "https://reuse.software/reuse-toml-v1.schema.json"
+
+version = 1
+SPDX-PackageName = "bgc"
+SPDX-PackageSupplier = "Frédéric ARROYO <opensource@frederic-arroyo.ch>"
+SPDX-PackageDownloadLocation = "https://codeberg.org/frederic-arr/bgc"
+
+# Configuration files
+[[annotations]]
+path = [
+    ".gitignore",
+    ".git-blame-ignore-revs",
+    ".editorconfig",
+    "Cargo.lock",
+    "Cargo.toml",
+]
+precedence = "aggregate"
+SPDX-License-Identifier = "CC0-1.0"
+SPDX-FileCopyrightText = "None"
+
+# Documentation files
+[[annotations]]
+path = [
+    "README.md",
+    "TODO.md",
+]
+precedence = "aggregate"
+SPDX-License-Identifier = "CC-BY-4.0"
+SPDX-FileCopyrightText = "2026 Frédéric ARROYO <opensource@frederic-arroyo.ch>"

@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: >-
+  If you use this software, please cite it using these metadata.
+  Code licensed under either the Apache License 2.0 or the MIT License at your option.
+  Documentation licensed under the Creative Commons Attribution 4.0 International.
+
+type: software
+title: Bulk Git Removal Check (bgrc)
+license:
+  - MIT
+  - Apache-2.0
+abstract: A command-line utility to recursively check a directory for any unversioned, uncommited, or unpushed content.
+authors:
+  - family-names: Arroyo
+    given-names: Frédéric
+    email: opensource@frederic-arroyo.ch
+contact:
+  - name: Bulk Git Removal Check maintainers
+    website: https://codeberg.org/frederic-arr/bgrc/issues
+
+repository: https://codeberg.org/frederic-arr/bgrc
+url: https://codeberg.org/frederic-arr/bgrc
